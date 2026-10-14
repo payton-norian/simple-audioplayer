@@ -5,7 +5,8 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gst", "1.0")
 
-from gi.repository import Gtk, Gst, GLib
+from gi.repository import Gtk, Gst, GLib, Gdk
+from urllib.parse import urlparse, unquote
 
 
 class Player(Gtk.Window):
@@ -13,6 +14,12 @@ class Player(Gtk.Window):
         super().__init__(title="Аудиоплеер")
         self.set_border_width(10)
         self.set_default_size(400, 320)  # Скорректировали высоту окна
+
+
+        self.drag_dest_set(Gtk.DestDefaults.ALL, [], Gdk.DragAction.COPY)
+        self.drag_dest_add_uri_targets()
+        self.connect("drag-data-received", self.on_drag_data_received)
+
 
         Gst.init(None)
 
@@ -251,6 +258,44 @@ class Player(Gtk.Window):
         self.stop_timeline_timer()
         self.player.set_state(Gst.State.NULL)
         Gtk.main_quit()
+
+    def on_drag_data_received(self, widget, context, x, y, selection, info, time):
+        uris = selection.get_uris()
+        if uris:
+            filenames = []
+            for uri in uris:
+                # Заменяем Gst.uri_to_filename на стандартный Python-способ
+                parsed = urlparse(uri)
+                path = unquote(parsed.path)
+                if path:
+                    filenames.append(path)
+            
+            if filenames:
+                self.append_dropped_files(filenames)
+        
+        context.finish(True, False, time)
+
+
+    def append_dropped_files(self, filenames):
+        new_uris = [Gst.filename_to_uri(f) for f in filenames]
+        playlist_was_empty = len(self.playlist) == 0
+        self.playlist.extend(new_uris)
+        self.add_to_playlist_ui(filenames)
+        if playlist_was_empty:
+            self.current_track_index = 0
+            self.play_current_track()
+
+    def on_destroy(self, widget):
+        self.stop_timeline_timer()
+        self.player.set_state(Gst.State.NULL)
+        Gtk.main_quit()
+
+
+if __name__ == "__main__":
+    Player()
+    Gtk.main()
+
+
 
 
 if __name__ == "__main__":

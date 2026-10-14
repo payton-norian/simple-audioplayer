@@ -14,6 +14,9 @@ class Player(QMainWindow):
         self.setWindowTitle("Аудиоплеер")
         self.resize(400, 320)
 
+        # РАЗРЕШАЕМ ПЕРЕТАСКИВАНИЕ ФАЙЛОВ В ОКНО
+        self.setAcceptDrops(True)
+
         # Инициализация медиа-плеера PyQt5
         self.player = QMediaPlayer()
 
@@ -77,6 +80,23 @@ class Player(QMainWindow):
         self.list_widget.itemActivated.connect(self.on_row_activated)
         main_layout.addWidget(self.list_widget)
 
+    # --- ОБРАБОТКА DRAG-N-DROP ---
+    def dragEnterEvent(self, event):
+        # Если в перетаскиваемых данных есть ссылки на файлы, разрешаем вход
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        # Получаем список путей из сброшенных файлов
+        urls = event.mimeData().urls()
+        if urls:
+            filenames = [url.toLocalFile() for url in urls if url.toLocalFile()]
+            if filenames:
+                self.append_files_from_list(filenames)
+        event.acceptProposedAction()
+
     # --- РАБОТА С ФАЙЛАМИ ---
     def run_file_chooser(self):
         file_filter = "Аудиофайлы (*.mp3 *.wav *.ogg *.m4a *.flac)"
@@ -90,21 +110,25 @@ class Player(QMainWindow):
         if filenames:
             self.playlist = filenames
             self.current_track_index = 0
-            
             self.list_widget.clear()
             self.add_to_playlist_ui(filenames)
             self.play_current_track()
 
     def append_files(self):
+        # Просто вызываем выбор файлов, затем передаем результат в обработчик
         filenames = self.run_file_chooser()
         if filenames:
-            playlist_was_empty = len(self.playlist) == 0
-            self.playlist.extend(filenames)
-            self.add_to_playlist_ui(filenames)
-            
-            if playlist_was_empty:
-                self.current_track_index = 0
-                self.play_current_track()
+            self.append_files_from_list(filenames)
+
+    def append_files_from_list(self, filenames):
+        # Общий метод добавления файлов (и для кнопки, и для DnD)
+        playlist_was_empty = len(self.playlist) == 0
+        self.playlist.extend(filenames)
+        self.add_to_playlist_ui(filenames)
+        
+        if playlist_was_empty:
+            self.current_track_index = 0
+            self.play_current_track()
 
     def add_to_playlist_ui(self, filenames):
         for f in filenames:
@@ -114,8 +138,6 @@ class Player(QMainWindow):
     def play_current_track(self):
         if 0 <= self.current_track_index < len(self.playlist):
             file_path = self.playlist[self.current_track_index]
-            
-            # Передаем абсолютный путь напрямую через QUrl.fromLocalFile
             url = QUrl.fromLocalFile(os.path.abspath(file_path))
             content = QMediaContent(url)
             
@@ -125,7 +147,6 @@ class Player(QMainWindow):
             self.list_widget.setCurrentRow(self.current_track_index)
         else:
             self.stop()
-
 
     def play_pause(self):
         if not self.playlist:
@@ -161,7 +182,6 @@ class Player(QMainWindow):
     def update_timeline(self, position):
         if self.is_seeking or self.player.duration() == 0:
             return
-        # Переводим текущую позицию в проценты (0-100)
         percentage = int((position / self.player.duration()) * 100)
         self.timeline.setValue(percentage)
 
@@ -183,9 +203,6 @@ class Player(QMainWindow):
 
     # --- АВТОПЕРЕКЛЮЧЕНИЕ ---
     def on_state_changed(self, state):
-        # В PyQt5 отслеживание окончания трека идет через статус медиа или остановку состояния плеера
-        # Когда трек доиграл до конца в обычном режиме, плеер переходит в StoppedState, 
-        # при этом позиция воспроизведения равна нулю или длительности трека.
         if state == QMediaPlayer.StoppedState and self.player.position() == self.player.duration() and self.player.duration() > 0:
             self.next_track()
 
@@ -195,4 +212,3 @@ if __name__ == "__main__":
     player = Player()
     player.show()
     sys.exit(app.exec_())
-
