@@ -285,10 +285,6 @@ class Player(Gtk.Window):
             self.current_track_index = 0
             self.play_current_track()
 
-    def on_destroy(self, widget):
-        self.stop_timeline_timer()
-        self.player.set_state(Gst.State.NULL)
-        Gtk.main_quit()
 
 
 if __name__ == "__main__":
@@ -298,6 +294,3 @@ if __name__ == "__main__":
 
 
 
-if __name__ == "__main__":
-    Player()
-    Gtk.main()
